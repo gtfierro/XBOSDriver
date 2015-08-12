@@ -19,6 +19,14 @@ class Timeseries(object):
         self.unit_measure = unit_measure
         self.unit_time = unit_time
         self.stream_type = stream_type
+        self.metadata = {}
+        self.properties = {
+            'UnitofTime': self.unit_time,
+            'UnitofMeasure': self.unit_measure,
+            'StreamType': self.stream_type
+        }
+        if self.stream_type == STREAM_TYPE_NUMERIC:
+            self.properties['ReadingType'] = 'double' # sane default. No need for long
 
     def __repr__(self):
         return "<Timeseries Path={path} UnitofMeasure={uom} UnitofTime={uot} StreamType={st}".format(
@@ -32,6 +40,8 @@ class Timeseries(object):
     def _validate_unit_measure(unit_measure):
         if unit_measure is None:
             raise ValidationException("unit_measure is NONE")
+        if not isinstance(unit_measure, str):
+            raise ValidationException("unit_measure must be string")
 
     @staticmethod
     def _validate_unit_time(unit_time):
@@ -58,11 +68,17 @@ class Timeseries(object):
             time = util.get_current_time_as(self.unit_time)
         return {self.path: {"Readings": (value, time)}}
 
+    def attach_metadata(self, metadata):
+        self.metadata = util.dict_merge(metadata, self.metadata)
+        print('md is now', self.metadata)
+
+
 
 class Driver(object):
     def __init__(self, opts):
         # timeseries registered with this driver
         self.timeseries = {}
+        self.metadata = {}
         self._tosend = []
         self._report_destinations = opts.get('report_destinations', [])
 
@@ -75,9 +91,26 @@ class Driver(object):
 
         print(self.timeseries)
 
+        for path, timeseries in self.timeseries.items():
+            self.attach_metadata(path, {'Location': {
+                                          'Building': 'Soda Hall',
+                                          'Campus': 'UC Berkeley'
+                                         },
+                                        'Sourcename': 'Demo Source'
+                                       })
+
+        for path, timeseries in self.timeseries.items():
+            self.attach_metadata(path, {'Location': {
+                                          'Room': '410',
+                                         }
+                                       })
+
+
         print("Starting...")
         self._loop = asyncio.get_event_loop()
+
         tasks = [self.start()]
+
         if len(self._report_destinations) > 0:
             tasks.append(self._report())
 
@@ -94,6 +127,13 @@ class Driver(object):
             raise ValidationException("Path {0} is already registered as a timeseries ({1})".format(path, self.timeseries))
         else:
             self.timeseries[path] = Timeseries(path, unit_measure, unit_time, stream_type)
+
+    def attach_metadata(self, path, metadata):
+        timeseries = self.timeseries.get(path, None)
+        if timeseries is not None:
+            timeseries.attach_metadata(metadata)
+        else:
+            self.metadata[path] = util.dict_merge(metadata, self.metadata[path])
 
     def add(self, path, value, time=None):
         if path not in self.timeseries.keys():
