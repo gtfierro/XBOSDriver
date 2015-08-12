@@ -16,12 +16,16 @@ class Timeseries(object):
         Timeseries._validate_stream_type(stream_type)
 
         # add to instance variables
+        # the path of this timeseries
         self.path = path
+        # buffer of uncommitted readings
+        self.buffer = []
+        # the unique identifier for this timeseries
         self.uuid = ts_uuid
+        # properties for this timeseries
         self.unit_measure = unit_measure
         self.unit_time = unit_time
         self.stream_type = stream_type
-        self.metadata = {}
         self.properties = {
             'UnitofTime': self.unit_time,
             'UnitofMeasure': self.unit_measure,
@@ -29,6 +33,10 @@ class Timeseries(object):
         }
         if self.stream_type == STREAM_TYPE_NUMERIC:
             self.properties['ReadingType'] = 'double' # sane default. No need for long
+        # metadata for this timeseries
+        self.metadata = {}
+        # whether or not there is metadata/properties that have yet to be committed
+        self.dirty = True
 
     def __repr__(self):
         return "<Timeseries Path={path} UnitofMeasure={uom} UnitofTime={uot} StreamType={st}".format(
@@ -63,16 +71,43 @@ class Timeseries(object):
                 raise ValidationException("Value {0} is not of type STREAM_TYPE_NUMERIC".format(value))
 
     def add(self, value, time=None):
+        """
+        Queues the given value to be sent to the archiver
+        """
         #TODO: handle unit of time
         #TODO: timezone support
         self._validate_value(value)
         if time is None:
             time = util.get_current_time_as(self.unit_time)
-        return {self.path: {"uuid": self.uuid, "Readings": [[value, time]]}}
+        self.buffer.append([value, time])
+
+    def get_report(self):
+        """
+        Returns a JSON-serializable, sMAP-profile message containing all the metadata and readings
+        to be sent to archiver
+        """
+        report = {self.path: {"uuid": self.uuid, "Readings": self.buffer}}
+        if self.dirty:
+            #TODO: just send the "diff"
+            report["Properties"] = self.properties
+            report["Metadata"] = self.metadata
+        return report
+
+    def clear_report(self):
+        """
+        Clears the local buffer of uncommitted readings
+        """
+        #TODO: only clear since last write
+        self.buffer = []
+        self.dirty = False
 
     def attach_metadata(self, metadata):
+        """
+        Attaches metadata to this timeseries following update/insert policy
+        """
         self.metadata = util.dict_merge(metadata, self.metadata)
         print('md is now', self.metadata)
+        self.dirty = True
 
 class Driver(object):
     def __init__(self, opts):
@@ -82,7 +117,6 @@ class Driver(object):
         if not isinstance(self.instanceUUID, uuid.UUID):
             self.instanceUUID = uuid.UUID(self.instanceUUID)
         self.metadata = {}
-        self._tosend = []
         self._report_destinations = opts.get('report_destinations', [])
 
         # handle options
@@ -142,15 +176,13 @@ class Driver(object):
     def add(self, path, value, time=None):
         if path not in self.timeseries.keys():
             raise TimeseriesException("Path {0} not registered with this driver ({1})".format(path, self.timeseries))
-        reading = self.timeseries[path].add(value, time)
-        self._tosend.append(reading)
+        self.timeseries[path].add(value, time)
 
     def _send(self, url, data, headers):
         try:
             print("send", data, headers)
             r = yield from aiohttp.request("POST", url, data=data, headers=headers)
-            yield from r.text()
-            print("resp",r)
+            return r
         except Exception as e:
             print("error",e)
 
@@ -165,17 +197,20 @@ class Driver(object):
         while True:
             yield from asyncio.sleep(self.rate)
             try:
-                if not len(self._tosend) > 0:
+                # generate report
+                report = {path: ts.get_report() for path, ts in self.timeseries.items()}
+                if not len(report) > 0:
                     continue # nothing to send
-                payload = {path: message for timeseries in self._tosend for path, message in timeseries.items()}
-                data = json.dumps(payload)
-                data = data.replace("'",'"')
-                headers = {'Content-type': 'application/json'}
 
+                payload = json.dumps(report)
+                headers = {'Content-type': 'application/json'}
                 coros = [] # list of requests to send out
                 for location in self._report_destinations:
-                    coros.append(asyncio.Task(self._send(location, data, headers)))
-                yield from asyncio.gather(*coros)
+                    coros.append(asyncio.Task(self._send(location, payload, headers)))
+                r = yield from asyncio.gather(*coros)
+                for ts, resp in zip(self.timeseries.values(), r):
+                    if resp.status == 200:
+                        ts.clear_report()
             except Exception as e:
                 print("error", e)
 
