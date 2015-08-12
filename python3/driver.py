@@ -1,14 +1,15 @@
 import asyncio
-import time
 import json
+import uuid
+import aiohttp
+
 from timeseriestypes import UNIT_TIMES, STREAM_TYPES
 from timeseriestypes import STREAM_TYPE_NUMERIC
 from exceptions import ValidationException, TimestampException, TimeseriesException
 import util
-from aiohttp import web
 
 class Timeseries(object):
-    def __init__(self, path, unit_measure, unit_time, stream_type):
+    def __init__(self, path, ts_uuid, unit_measure, unit_time, stream_type):
         # validate
         Timeseries._validate_unit_measure(unit_measure)
         Timeseries._validate_unit_time(unit_time)
@@ -16,6 +17,7 @@ class Timeseries(object):
 
         # add to instance variables
         self.path = path
+        self.uuid = ts_uuid
         self.unit_measure = unit_measure
         self.unit_time = unit_time
         self.stream_type = stream_type
@@ -66,18 +68,19 @@ class Timeseries(object):
         self._validate_value(value)
         if time is None:
             time = util.get_current_time_as(self.unit_time)
-        return {self.path: {"Readings": (value, time)}}
+        return {self.path: {"uuid": self.uuid, "Readings": [[value, time]]}}
 
     def attach_metadata(self, metadata):
         self.metadata = util.dict_merge(metadata, self.metadata)
         print('md is now', self.metadata)
 
-
-
 class Driver(object):
     def __init__(self, opts):
         # timeseries registered with this driver
         self.timeseries = {}
+        self.instanceUUID = opts.get('instanceUUID', uuid.uuid1())
+        if not isinstance(self.instanceUUID, uuid.UUID):
+            self.instanceUUID = uuid.UUID(self.instanceUUID)
         self.metadata = {}
         self._tosend = []
         self._report_destinations = opts.get('report_destinations', [])
@@ -126,7 +129,8 @@ class Driver(object):
         if path in self.timeseries.keys():
             raise ValidationException("Path {0} is already registered as a timeseries ({1})".format(path, self.timeseries))
         else:
-            self.timeseries[path] = Timeseries(path, unit_measure, unit_time, stream_type)
+            ts_uuid = str(uuid.uuid5(self.instanceUUID, path))
+            self.timeseries[path] = Timeseries(path, ts_uuid, unit_measure, unit_time, stream_type)
 
     def attach_metadata(self, path, metadata):
         timeseries = self.timeseries.get(path, None)
@@ -141,11 +145,14 @@ class Driver(object):
         reading = self.timeseries[path].add(value, time)
         self._tosend.append(reading)
 
-    def _send(self):
-        if not len(self._tosend) > 0:
-            return # nothing to send
-        payload = {path: message for timeseries in self._tosend for path, message in timeseries.items()}
-        print(payload)
+    def _send(self, url, data, headers):
+        try:
+            print("send", data, headers)
+            r = yield from aiohttp.request("POST", url, data=data, headers=headers)
+            yield from r.text()
+            print("resp",r)
+        except Exception as e:
+            print("error",e)
 
     @asyncio.coroutine
     def start(self):
@@ -157,7 +164,20 @@ class Driver(object):
     def _report(self):
         while True:
             yield from asyncio.sleep(self.rate)
-            self._send()
+            try:
+                if not len(self._tosend) > 0:
+                    continue # nothing to send
+                payload = {path: message for timeseries in self._tosend for path, message in timeseries.items()}
+                data = json.dumps(payload)
+                data = data.replace("'",'"')
+                headers = {'Content-type': 'application/json'}
+
+                coros = [] # list of requests to send out
+                for location in self._report_destinations:
+                    coros.append(asyncio.Task(self._send(location, data, headers)))
+                yield from asyncio.gather(*coros)
+            except Exception as e:
+                print("error", e)
 
 
     def poll(self):
@@ -168,8 +188,9 @@ class Driver(object):
 
 config = {
     "report_destinations": ["http://localhost:8079/add/apikey"],
-    "num_timeseries": 2,
-    "rate": 1
+    "num_timeseries": 1,
+    "rate": 1,
+    "instanceUUID": "f92f89ac-40ec-11e5-b998-5cc5d4ded1ae"
 }
 
 d = Driver(config)
