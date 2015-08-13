@@ -6,6 +6,7 @@ import aiohttp
 from timeseriestypes import UNIT_TIMES, STREAM_TYPES
 from timeseriestypes import STREAM_TYPE_NUMERIC
 from exceptions import ValidationException, TimestampException, TimeseriesException
+import subscribe
 import util
 
 class Timeseries(object):
@@ -146,7 +147,9 @@ class Driver(object):
         print("Starting...")
         self._loop = asyncio.get_event_loop()
 
-        tasks = [self.start()]
+        self.subscription = subscribe.Subscriber('http://localhost:8079/republish2', 'select * where has uuid', self.subscribecb)
+
+        tasks = [self.start(), asyncio.Task(self.subscription.subscribe())]
 
         if len(self._report_destinations) > 0:
             tasks.append(self._report())
@@ -156,6 +159,9 @@ class Driver(object):
                 tasks
             )
         )
+
+    def subscribecb(self, msg):
+        print("callback!", msg)
 
 
     def add_timeseries(self, path, unit_measure, unit_time, stream_type):
