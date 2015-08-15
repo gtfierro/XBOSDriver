@@ -1,4 +1,5 @@
 import asyncio
+import socket
 import json
 import uuid
 import aiohttp
@@ -119,6 +120,7 @@ class Driver(object):
             self.instanceUUID = uuid.UUID(self.instanceUUID)
         self.metadata = {}
         self._report_destinations = opts.get('report_destinations', [])
+        self._udp4socks = {}
 
         # handle options
         print(opts)
@@ -149,16 +151,11 @@ class Driver(object):
 
         self.subscription = subscribe.Subscriber('http://localhost:8079/republish2', 'select * where has uuid', self.subscribecb)
 
-        tasks = [self.start(), asyncio.Task(self.subscription.subscribe())]
+        self.tasks = [asyncio.Task(self.subscription.subscribe())]
 
         if len(self._report_destinations) > 0:
-            tasks.append(self._report())
+            self.tasks.append(self._report())
 
-        self._loop.run_until_complete(
-            asyncio.wait(
-                tasks
-            )
-        )
 
     def subscribecb(self, msg):
         print("callback!", msg)
@@ -192,11 +189,46 @@ class Driver(object):
         except Exception as e:
             print("error",e)
 
+    def startPoll(self, func, rate):
+        """
+        Called by the subclassed driver to register the poll method
+        Registers func to be called every rate seconds
+        """
+        self.tasks.append(self._startPoll(func, rate))
+
     @asyncio.coroutine
-    def start(self):
+    def _startPoll(self, func, rate):
+        """
+        Calls func every rate seconds
+        """
         while True:
-            yield from asyncio.sleep(self.rate)
-            self.poll()
+            yield from asyncio.sleep(rate)
+            func()
+
+    def listenUDP4(self, func, port, readsize=1024):
+        if not isinstance(port, int):
+            raise ValidationException("Port {0} must be int".format(port))
+        if port in self._udp4sock:
+            raise SmapSocketException("Port {0} is already used for UDP4: {1}".format(port, self._udp4sock))
+        self._udp4sock[port] = socket.socket(AF_INET, SOCK_DGRAM)
+        self._udp4sock[port].bind(("0.0.0.0", int(port)))
+        self.tasks.append(self._listenUDP4(func, port, readsize))
+
+    @asyncio.coroutine
+    def _listenUDP4(self, func, port, readsize):
+        while True:
+            data = yield from self._udp4sock[port].read(readsize)
+            func(data.decode())
+
+    def _dostart(self):
+        """
+        Starts the event loop with the registered tasks
+        """
+        self._loop.run_until_complete(
+            asyncio.wait(
+                self.tasks
+            )
+        )
 
     @asyncio.coroutine
     def _report(self):
@@ -227,6 +259,9 @@ class Driver(object):
         for path, timeseries in self.timeseries.items():
             self.add(path, self.counter)
 
+    def recv(self, addr, data):
+        pass
+
 config = {
     "report_destinations": ["http://localhost:8079/add/apikey"],
     "num_timeseries": 1,
@@ -235,3 +270,5 @@ config = {
 }
 
 d = Driver(config)
+d.startPoll(d.poll, 1)
+d._dostart()
