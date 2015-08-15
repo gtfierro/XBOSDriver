@@ -88,7 +88,7 @@ class Timeseries(object):
         Returns a JSON-serializable, sMAP-profile message containing all the metadata and readings
         to be sent to archiver
         """
-        report = {self.path: {"uuid": self.uuid, "Readings": self.buffer}}
+        report = {"uuid": self.uuid, "Readings": self.buffer}
         if self.dirty:
             #TODO: just send the "diff"
             report["Properties"] = self.properties
@@ -112,46 +112,23 @@ class Timeseries(object):
         self.dirty = True
 
 class Driver(object):
-    def __init__(self, opts):
+    def __init__(self, config):
         # timeseries registered with this driver
         self.timeseries = {}
-        self.instanceUUID = opts.get('instanceUUID', uuid.uuid1())
+        self.instanceUUID = config.get('instanceUUID', uuid.uuid1())
         if not isinstance(self.instanceUUID, uuid.UUID):
             self.instanceUUID = uuid.UUID(self.instanceUUID)
         self.metadata = {}
-        self._report_destinations = opts.get('report_destinations', [])
+        self._report_destinations = config.get('report_destinations', [])
         self._udp4socks = {}
 
-        # handle options
-        print(opts)
-        self.rate = int(opts.get('rate', 1))
-        self.counter = 0
-        for i in range(opts.get('num_timeseries')):
-            self.add_timeseries('/sensor{0}'.format(i), "V", "seconds", "numeric")
 
-        print(self.timeseries)
-
-        for path, timeseries in self.timeseries.items():
-            self.attach_metadata(path, {'Location': {
-                                          'Building': 'Soda Hall',
-                                          'Campus': 'UC Berkeley'
-                                         },
-                                        'Sourcename': 'Demo Source'
-                                       })
-
-        for path, timeseries in self.timeseries.items():
-            self.attach_metadata(path, {'Location': {
-                                          'Room': '410',
-                                         }
-                                       })
-
-
-        print("Starting...")
+    def prepare(self):
         self._loop = asyncio.get_event_loop()
 
         self.subscription = subscribe.Subscriber('http://localhost:8079/republish2', 'select * where has uuid', self.subscribecb)
 
-        self.tasks = [asyncio.Task(self.subscription.subscribe())]
+        self.tasks = [] #[asyncio.Task(self.subscription.subscribe())]
 
         if len(self._report_destinations) > 0:
             self.tasks.append(self._report())
@@ -247,28 +224,17 @@ class Driver(object):
                     coros.append(asyncio.Task(self._send(location, payload, headers)))
                 r = yield from asyncio.gather(*coros)
                 for ts, resp in zip(self.timeseries.values(), r):
+                    print(resp)
                     if resp.status == 200:
                         ts.clear_report()
+                        resp.close()
             except Exception as e:
                 print("error", e)
 
 
-    def poll(self):
-        self.counter += 1
-        print("polling, counter is {0}".format(self.counter))
-        for path, timeseries in self.timeseries.items():
-            self.add(path, self.counter)
-
     def recv(self, addr, data):
         pass
 
-config = {
-    "report_destinations": ["http://localhost:8079/add/apikey"],
-    "num_timeseries": 1,
-    "rate": 1,
-    "instanceUUID": "f92f89ac-40ec-11e5-b998-5cc5d4ded1ae"
-}
-
-d = Driver(config)
-d.startPoll(d.poll, 1)
-d._dostart()
+#d = Driver(config)
+#d.startPoll(d.poll, 1)
+#d._dostart()
