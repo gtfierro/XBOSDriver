@@ -5,8 +5,7 @@ I think it is prudent to investigate new event loop frameworks that support the 
 be done within a simple, lightweight framework that considers all used traffic patterns as first-class design decisions rather than afterthoughts
 and provides an implementation that is both easy to understand and easy to integrate.
 
-To "drive the point home", this repository will include client frameworks and examples in several languages. This is not meant to replace or supercede
-BOSSWAVE in anyway -- at this point in time, BW2 is not a usable system from the persepctive of documentation and available client support. There is
+To "drive the point home", this repository will include client frameworks and examples in several languages. There is
 a definite need for a simple framework to explore the sMAP protocol and how it jives with Giles the concepts of XBOS. This is that framework.
 
 ## Structure
