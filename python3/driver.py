@@ -120,23 +120,21 @@ class Driver(object):
             self.instanceUUID = uuid.UUID(self.instanceUUID)
         self.metadata = {}
         self._report_destinations = config.get('report_destinations', [])
+        # we introduce the archiver as a necessary part of driver configuration
+        self._archiver = config.get('archiver', 'http://localhost:8079')
         self._udp4socks = {}
+        self._tasks = []
 
 
     def prepare(self):
         self._loop = asyncio.get_event_loop()
 
-        self.subscription = subscribe.Subscriber('http://localhost:8079/republish2', 'select * where has uuid', self.subscribecb)
-
-        self.tasks = [] #[asyncio.Task(self.subscription.subscribe())]
-
         if len(self._report_destinations) > 0:
-            self.tasks.append(self._report())
+            self._tasks.append(self._report())
 
-
-    def subscribecb(self, msg):
-        print("callback!", msg)
-
+    def add_subscription(self, query, callback):
+        subscription = subscribe.Subscriber(self._archiver+'/republish', query, callback)
+        self._tasks.append(subscription.subscribe())
 
     def add_timeseries(self, path, unit_measure, unit_time, stream_type):
         # validate arguments
@@ -160,7 +158,7 @@ class Driver(object):
 
     def _send(self, url, data, headers):
         try:
-            print("send", data, headers)
+            #print("send", data, headers)
             r = yield from aiohttp.request("POST", url, data=data, headers=headers)
             return r
         except Exception as e:
@@ -171,7 +169,7 @@ class Driver(object):
         Called by the subclassed driver to register the poll method
         Registers func to be called every rate seconds
         """
-        self.tasks.append(self._startPoll(func, rate))
+        self._tasks.append(self._startPoll(func, rate))
 
     @asyncio.coroutine
     def _startPoll(self, func, rate):
@@ -189,7 +187,7 @@ class Driver(object):
             raise SmapSocketException("Port {0} is already used for UDP4: {1}".format(port, self._udp4sock))
         self._udp4sock[port] = socket.socket(AF_INET, SOCK_DGRAM)
         self._udp4sock[port].bind(("0.0.0.0", int(port)))
-        self.tasks.append(self._listenUDP4(func, port, readsize))
+        self._tasks.append(self._listenUDP4(func, port, readsize))
 
     @asyncio.coroutine
     def _listenUDP4(self, func, port, readsize):
@@ -203,7 +201,7 @@ class Driver(object):
         """
         self._loop.run_until_complete(
             asyncio.wait(
-                self.tasks
+                self._tasks
             )
         )
 
@@ -224,7 +222,7 @@ class Driver(object):
                     coros.append(asyncio.Task(self._send(location, payload, headers)))
                 r = yield from asyncio.gather(*coros)
                 for ts, resp in zip(self.timeseries.values(), r):
-                    print(resp)
+                    #print(resp)
                     if resp.status == 200:
                         ts.clear_report()
                         resp.close()
@@ -234,7 +232,3 @@ class Driver(object):
 
     def recv(self, addr, data):
         pass
-
-#d = Driver(config)
-#d.startPoll(d.poll, 1)
-#d._dostart()

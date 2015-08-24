@@ -2,8 +2,11 @@ import driver
 
 config = {
     "report_destinations": ["http://localhost:8079/add/apikey"],
-    "instanceUUID": "f92f89ac-40ec-11e5-b998-5cc5d4ded1ae"
+    "instanceUUID": "f92f89ac-40ec-11e5-b998-5cc5d4ded1ae",
+    "apikey": "dummyapikey",
+    "archiver": "http://localhost:8079"
 }
+
 
 opts = {
     "num_timeseries": 1,
@@ -43,6 +46,11 @@ class SampleDriver(driver.Driver):
                                           'Room': '410',
                                          }
                                        })
+
+        self.add_subscription("Metadata/Schedule/Point/Name = 'Heating Setpoint'", self.schedulecb)
+
+    def schedulecb(self, res):
+        print("got CB", res)
 
     def start(self):
         # calls self.poll at @rate seconds

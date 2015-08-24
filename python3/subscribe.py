@@ -13,11 +13,13 @@ class Subscriber:
 
     def subscribe(self):
         try:
+            print("subscribe to", self.url)
             resp = yield from aiohttp.request("POST", self.url, data=self.query)
         except Exception as e:
             print(e)
             return
 
+        print("resp", resp)
         i = 0
         buffer = bytearray()
         while True:
