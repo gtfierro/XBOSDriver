@@ -111,6 +111,13 @@ class Timeseries(object):
         print('md is now', self.metadata)
         self.dirty = True
 
+    def attach_actuator(self, actuator):
+        pass
+    #TODO: maybe define an attach_schedule to a timeseries? it would need to have an actuator on it
+    #      and the method would automatically call that actuator and do the necessary conversions (or at least
+    #      warn you when they were wrong). maybe "attach_actuation_source"? needs to be more general, e.g. for
+    #      zone controllers too
+
 class Driver(object):
     def __init__(self, config):
         # timeseries registered with this driver
@@ -208,6 +215,7 @@ class Driver(object):
             )
         )
 
+    #TODO: add report "added X points in the last minute w/ mean X, min Y max Z?"
     @asyncio.coroutine
     def _report(self):
         while True:

@@ -48,13 +48,19 @@ class SampleDriver(driver.Driver):
                                        })
 
         self.add_subscription("select distinct Metadata/Schedule/Name where has Metadata/Schedule/Name", self.schedlist, url=self.config['archiver']+'/republish2')
-        self.add_subscription("Metadata/Schedule/Point/Name = 'Heating Setpoint' and Metadata/Schedule/Name = 'weekday'", self.schedulecb)
+        self.add_subscription("select * where Metadata/Schedule/Point/Name = 'Heating Setpoint' and Metadata/Schedule/Name = 'weekday'", self.schedulecb, url=self.config['archiver']+'/republish2')
 
     def schedulecb(self, res):
+        print(res['Readings'][0])
         print("got CB", res)
+        self.actuate('/sensor0', res['Readings'][0][1])
 
     def schedlist(self, l):
         print("new list of schedules", l)
+
+    def actuate(self, timeseries, value):
+        print("actuating {0} to {1}".format(timeseries, value))
+        self.add(timeseries, value)
 
     def start(self):
         # calls self.poll at @rate seconds
