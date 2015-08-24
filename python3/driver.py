@@ -124,6 +124,7 @@ class Driver(object):
         self._archiver = config.get('archiver', 'http://localhost:8079')
         self._udp4socks = {}
         self._tasks = []
+        self.config = config
 
 
     def prepare(self):
@@ -132,8 +133,10 @@ class Driver(object):
         if len(self._report_destinations) > 0:
             self._tasks.append(self._report())
 
-    def add_subscription(self, query, callback):
-        subscription = subscribe.Subscriber(self._archiver+'/republish', query, callback)
+    def add_subscription(self, query, callback, url=None):
+        if url is None:
+            url = self._archiver+'/republish'
+        subscription = subscribe.Subscriber(url, query, callback)
         self._tasks.append(subscription.subscribe())
 
     def add_timeseries(self, path, unit_measure, unit_time, stream_type):
