@@ -19,7 +19,7 @@ def run(dvr, config, opts):
     inst.prepare()
     inst.start()
     inst._dostart()
-    
+
 
 class SampleDriver(driver.Driver):
     def setup(self, opts):
@@ -47,10 +47,14 @@ class SampleDriver(driver.Driver):
                                          }
                                        })
 
-        self.add_subscription("Metadata/Schedule/Point/Name = 'Heating Setpoint'", self.schedulecb)
+        self.add_subscription("select distinct Metadata/Schedule/Name where has Metadata/Schedule/Name", self.schedlist, url=self.config['archiver']+'/republish2')
+        self.add_subscription("Metadata/Schedule/Point/Name = 'Heating Setpoint' and Metadata/Schedule/Name = 'weekday'", self.schedulecb)
 
     def schedulecb(self, res):
         print("got CB", res)
+
+    def schedlist(self, l):
+        print("new list of schedules", l)
 
     def start(self):
         # calls self.poll at @rate seconds
