@@ -19,7 +19,6 @@ class Subscriber:
             print(e)
             return
 
-        print("resp", resp)
         i = 0
         buffer = bytearray()
         while True:
@@ -40,4 +39,5 @@ class Subscriber:
             buffer = chunks[-1]
         # decode messages into strings
         messages = map(lambda x: x.decode(encoding='utf-8'), messages)
+        messages = map(lambda x: json.loads(x), messages)
         return buffer, messages
