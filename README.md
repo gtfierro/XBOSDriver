@@ -24,6 +24,9 @@ Desired Features:
   most likely as the result of a metadata subscription
 * *handle push traffic*: a driver should be able to be the destination of an underlying services -- handling ports and push protocols in twisted
   was always very difficult, especially regarding ipv6
+* *Go-like packaging for drivers*: instead of reading ONLY out of a central repository (which we will have), let drivers/config files
+  specify full URLs for driver locations so that they can be more easily referenced/fetched. This could use Git, Mercurial SVN, HTTP,
+  SSH, etc to fetch the drivers
 
 ## Languages
 
