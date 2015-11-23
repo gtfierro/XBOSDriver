@@ -4,7 +4,7 @@ import json
 import uuid
 import aiohttp
 
-from timeseriestypes import UNIT_TIMES, STREAM_TYPES
+from timeseriestypes import UNIT_TIMES, STREAM_TYPES, UNIT_TIME_MAP
 from timeseriestypes import STREAM_TYPE_NUMERIC
 from exceptions import ValidationException, TimestampException, TimeseriesException
 import subscribe
@@ -29,7 +29,7 @@ class Timeseries(object):
         self.unit_time = unit_time
         self.stream_type = stream_type
         self.properties = {
-            'UnitofTime': self.unit_time,
+            'UnitofTime': UNIT_TIME_MAP[self.unit_time],
             'UnitofMeasure': self.unit_measure,
             'StreamType': self.stream_type
         }
