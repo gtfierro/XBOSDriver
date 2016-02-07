@@ -9,7 +9,7 @@
 ## Configuration
 
 | key | meaning | example |
-+-----+---------+---------+
+|-----|---------|---------|
 |`bridge_ip` | IPv4 address of the Philips Hue bridge. | `192.168.1.242` |
 |`report_rate` | Time in seconds between polls. Defaults to 10 seconds | 10 |
 |`deviceID` | unique UUID for this deployment |  "f00ef112-cd75-11e5-ac2e-0001c009bf2f" |
