@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from timeseriestypes import UNIT_TIMES
-from timeseriestypes import UNIT_TIME_SECONDS, UNIT_TIME_MILLISECONDS, \
+from XBOSDriver.timeseriestypes import UNIT_TIMES
+from XBOSDriver.timeseriestypes import UNIT_TIME_SECONDS, UNIT_TIME_MILLISECONDS, \
                   UNIT_TIME_MICROSECONDS, UNIT_TIME_NANOSECONDS
 
 UNIT_TIME_LOOKUP = {

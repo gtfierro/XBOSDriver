@@ -4,11 +4,11 @@ import json
 import uuid
 import aiohttp
 
-from timeseriestypes import UNIT_TIMES, STREAM_TYPES, UNIT_TIME_MAP
-from timeseriestypes import STREAM_TYPE_NUMERIC
-from exceptions import ValidationException, TimestampException, TimeseriesException
-import subscribe
-import util
+from XBOSDriver.timeseriestypes import UNIT_TIMES, STREAM_TYPES, UNIT_TIME_MAP
+from XBOSDriver.timeseriestypes import STREAM_TYPE_NUMERIC
+from XBOSDriver.exceptions import ValidationException, TimestampException, TimeseriesException
+from XBOSDriver.subscribe import Subscriber
+import XBOSDriver.util as util
 
 class Timeseries(object):
     def __init__(self, path, ts_uuid, unit_measure, unit_time, stream_type):
@@ -81,7 +81,7 @@ class Timeseries(object):
         self._validate_value(value)
         if time is None:
             time = util.get_current_time_as(self.unit_time)
-        self.buffer.append([value, time])
+        self.buffer.append([time, value])
 
     def get_report(self):
         """
@@ -143,7 +143,7 @@ class Driver(object):
     def add_subscription(self, query, callback, url=None):
         if url is None:
             url = self._archiver+'/republish'
-        subscription = subscribe.Subscriber(url, query, callback)
+        subscription = Subscriber(url, query, callback)
         self._tasks.append(subscription.subscribe())
 
     def add_timeseries(self, path, unit_measure, unit_time, stream_type):
@@ -153,6 +153,7 @@ class Driver(object):
         else:
             ts_uuid = str(uuid.uuid5(self.instanceUUID, path))
             self.timeseries[path] = Timeseries(path, ts_uuid, unit_measure, unit_time, stream_type)
+        return path
 
     def attach_metadata(self, path, metadata):
         timeseries = self.timeseries.get(path, None)
