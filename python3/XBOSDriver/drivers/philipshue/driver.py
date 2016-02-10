@@ -18,7 +18,7 @@ opts = {
 class PhilipsHueDriver(driver.Driver):
     def setup(self, opts):
         self.rate = int(opts.get('report_rate', 10))
-        
+
         self.bridge = phue.Bridge(opts.get('bridge_ip'))
         self.bridge.connect()
 
@@ -32,16 +32,16 @@ class PhilipsHueDriver(driver.Driver):
                 self.attach_metadata(onpath, {'Point': {'Type': 'State', 'State': 'On/Off'}})
 
                 huepath = self.add_timeseries('/light{0}/hue'.format(light_id), 'Hue', 'milliseconds', 'numeric')
-                self.attach_metadata(onpath, {'Point': {'Type': 'State', 'State': 'Hue'}})
+                self.attach_metadata(huepath, {'Point': {'Type': 'State', 'State': 'Hue'}})
 
                 bripath = self.add_timeseries('/light{0}/brightness'.format(light_id), 'Brightness', 'milliseconds', 'numeric')
-                self.attach_metadata(onpath, {'Point': {'Type': 'State', 'State': 'Brightness'}})
+                self.attach_metadata(bripath, {'Point': {'Type': 'State', 'State': 'Brightness'}})
 
                 self.registered_lights.add(light_id)
 
         # TODO: have a library of metadata configurations for common things, e.g. light brightness, etc
 
-        for path, timesreies in self.timeseries.items():
+        for path, timeseries in self.timeseries.items():
             self.attach_metadata(path, {'Location': {'Building': "Gabe's Apartment",
                                                      'Room': 'Bedroom'},
                                         'SourceName': 'Gabe House',
@@ -54,7 +54,7 @@ class PhilipsHueDriver(driver.Driver):
                                             'Type': 'Desklamp'
                                             }
                                         })
-        
+
 
     def start(self):
         self.startPoll(self.poll, self.rate)
