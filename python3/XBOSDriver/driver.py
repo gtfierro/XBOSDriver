@@ -232,12 +232,12 @@ class Driver(object):
                 coros = [] # list of requests to send out
                 for location in self._report_destinations:
                     coros.append(asyncio.Task(self._send(location, payload, headers)))
-                r = yield from asyncio.gather(*coros)
-                for ts, resp in zip(self.timeseries.values(), r):
-                    #print(resp)
-                    if resp.status == 200:
-                        ts.clear_report()
-                        resp.close()
+                responses = yield from asyncio.gather(*coros)
+                for response in responses:
+                    if response.status == 200:
+                        for ts in self.timeseries.values():
+                            ts.clear_report()
+                    response.close()
             except Exception as e:
                 print("error", e)
 
