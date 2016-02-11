@@ -10,8 +10,11 @@ from XBOSDriver.exceptions import ValidationException, TimestampException, Times
 from XBOSDriver.subscribe import Subscriber
 import XBOSDriver.util as util
 
+BINARY_ACTUATOR = 'binary'
+CONTINUOUS_ACTUATOR = 'continuous'
+
 class Timeseries(object):
-    def __init__(self, path, ts_uuid, unit_measure, unit_time, stream_type):
+    def __init__(self, path, ts_uuid, unit_measure, unit_time, stream_type, is_actuator=False):
         # validate
         Timeseries._validate_unit_measure(unit_measure)
         Timeseries._validate_unit_time(unit_time)
@@ -37,8 +40,12 @@ class Timeseries(object):
             self.properties['ReadingType'] = 'double' # sane default. No need for long
         # metadata for this timeseries
         self.metadata = {}
+        # actuator timeseries
+        self.actuator = None
         # whether or not there is metadata/properties that have yet to be committed
         self.dirty = True
+        # if this stream is an actuator
+        self.is_actuator = is_actuator
 
     def __repr__(self):
         return "<Timeseries Path={path} UnitofMeasure={uom} UnitofTime={uot} StreamType={st}".format(
@@ -93,6 +100,10 @@ class Timeseries(object):
             #TODO: just send the "diff"
             report["Properties"] = self.properties
             report["Metadata"] = self.metadata
+            if self.actuator is not None:
+                report["Actuator"] = {"uuid": self.actuator_uuid}
+            elif self.is_actuator:
+                report["Actuator"] = {"Model": self.model}
         return report
 
     def clear_report(self):
@@ -110,9 +121,15 @@ class Timeseries(object):
         self.metadata = util.dict_merge(metadata, self.metadata)
         print('md is now', self.metadata)
         self.dirty = True
+        if self.actuator is not None:
+            self.actuator.attach_metadata(metadata)
 
-    def attach_actuator(self, actuator):
-        pass
+    def attach_actuator(self, kind=None, states=None, range=None):
+        if self.is_actuator:
+            raise ValidationException("Path {0} is already an actuator".format(self.path))
+        if kind not in [BINARY_ACTUATOR, CONTINUOUS_ACTUATOR]:
+            raise ValidationException("Actuator must be Binary or Continuous")
+        self.actuator_uuid = str(uuid.uuid5(uuid.UUID(self.uuid), self.path+'_act'))
     #TODO: maybe define an attach_schedule to a timeseries? it would need to have an actuator on it
     #      and the method would automatically call that actuator and do the necessary conversions (or at least
     #      warn you when they were wrong). maybe "attach_actuation_source"? needs to be more general, e.g. for
@@ -122,6 +139,8 @@ class Driver(object):
     def __init__(self, config):
         # timeseries registered with this driver
         self.timeseries = {}
+        # actuator paths registered
+        self.actuators = {}
         self.instanceUUID = config.get('instanceUUID', uuid.uuid1())
         if not isinstance(self.instanceUUID, uuid.UUID):
             self.instanceUUID = uuid.UUID(self.instanceUUID)
@@ -161,6 +180,27 @@ class Driver(object):
             timeseries.attach_metadata(metadata)
         else:
             self.metadata[path] = util.dict_merge(metadata, self.metadata[path])
+
+    #TODO: right now this can only be done AFTER all the metadata changes. Make a timeseries reflect its metadata to its actuator automatically
+    def attach_actuator(self, path, callback, kind=None, states=None, range=None):
+        ts = self.timeseries.get(path, None)
+        ts.attach_actuator(kind, states, range)
+        if ts is None:
+            raise ValidationException("Adding actuator to non-existant timeseries "+path)
+            return
+
+        # add in the actuator
+        act_path = path+'_act'
+        if act_path in self.actuators.keys():
+            raise ValidationException("Path {0} is already registered as an actuator".format(act_path))
+        else:
+            ts.actuator = Timeseries(path+'_act', ts.actuator_uuid, ts.unit_measure, ts.unit_time, ts.stream_type, is_actuator=True)
+            ts.actuator.attach_metadata(ts.metadata)
+            ts.actuator.model = kind
+            ts.actuator.states = states
+            ts.actuator.range = range
+            self.actuators[act_path] = ts.actuator
+            self.add_subscription("Actuator/override = '{0}'".format(ts.actuator_uuid), callback)
 
     def add(self, path, value, time=None):
         if path not in self.timeseries.keys():
@@ -224,6 +264,7 @@ class Driver(object):
             try:
                 # generate report
                 report = {path: ts.get_report() for path, ts in self.timeseries.items()}
+                report.update({path: act.get_report() for path, act in self.actuators.items()})
                 if not len(report) > 0:
                     continue # nothing to send
 
