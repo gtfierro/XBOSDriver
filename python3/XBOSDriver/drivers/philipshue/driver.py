@@ -12,6 +12,7 @@ opts = {
     # deployment
     "bridge_ip": "192.168.1.242",
     "report_rate": 5,
+    "name": "Gabe Desk Light",
     "deviceID": "f00ef112-cd75-11e5-ac2e-0001c009bf2f"
 }
 
@@ -49,6 +50,8 @@ class PhilipsHueDriver(driver.Driver):
                                             'Manufacturer': 'Philips',
                                             'Model': 'Philips Hue'
                                             },
+                                        'DeviceID': opts.get('deviceID'),
+                                        'Name': opts.get('name'),
                                         'Lighting': {
                                             'Zone': 'Bedroom',
                                             'Type': 'Desklamp'
