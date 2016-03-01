@@ -6,10 +6,11 @@ class Subscriber:
     delimiter = b'\n\n'
     readsize = 128
 
-    def __init__(self, subscribeURL, query, callback):
+    def __init__(self, subscribeURL, query, callback, args=[]):
         self.url = subscribeURL
         self.query = query
         self.cb = callback
+        self.args = args
 
     def subscribe(self):
         try:
@@ -29,7 +30,8 @@ class Subscriber:
             buffer, messages = self.get_messages(buffer)
             if not messages: continue
             for msg in messages:
-                self.cb(msg)
+                if msg == None: continue
+                self.cb(msg, *self.args)
 
     def get_messages(self, buffer):
         messages = []

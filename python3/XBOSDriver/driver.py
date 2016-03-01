@@ -163,7 +163,7 @@ class Driver(object):
         if len(self._report_destinations) > 0:
             self._tasks.append(self._report())
 
-    def add_subscription(self, query, callback, url=None):
+    def add_subscription(self, query, callback, url=None, args=None):
         if url is None:
             url = self._archiver+'/republish'
         subscription = Subscriber(url, query, callback)
@@ -186,7 +186,7 @@ class Driver(object):
             self.metadata[path] = util.dict_merge(metadata, self.metadata[path])
 
     #TODO: right now this can only be done AFTER all the metadata changes. Make a timeseries reflect its metadata to its actuator automatically
-    def attach_actuator(self, path, callback, kind=None, states=None, range=None):
+    def attach_actuator(self, path, callback, kind=None, states=None, range=None, args=None):
         ts = self.timeseries.get(path, None)
         ts.attach_actuator(kind, states, range)
         if ts is None:
