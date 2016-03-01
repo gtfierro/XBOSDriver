@@ -93,4 +93,5 @@ def run(dvr, config, opts):
     inst.start()
     inst._dostart()
 
-run(LIFXDriver, config, opts)
+if __name__=='__main__':
+    run(LIFXDriver, config, opts)

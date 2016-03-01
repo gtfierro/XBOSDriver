@@ -207,4 +207,5 @@ def run(dvr, config, opts):
     inst.start()
     inst._dostart()
 
-run(IMT550CDriver, config, opts)
+if __name__=='__main__':
+    run(IMT550CDriver, config, opts)
