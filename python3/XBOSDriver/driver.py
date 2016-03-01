@@ -3,6 +3,10 @@ import socket
 import json
 import uuid
 import aiohttp
+import logging
+logging.basicConfig(format='%(levelname)s:%(asctime)s %(name)s %(message)s', level=logging.INFO)
+logger = logging.getLogger('driver')
+logging.getLogger("requests.packages.urllib3.connectionpool").setLevel(logging.WARNING)
 
 from XBOSDriver.timeseriestypes import UNIT_TIMES, STREAM_TYPES, UNIT_TIME_MAP
 from XBOSDriver.timeseriestypes import STREAM_TYPE_NUMERIC
@@ -271,13 +275,17 @@ class Driver(object):
                 payload = json.dumps(report)
                 headers = {'Content-type': 'application/json'}
                 coros = [] # list of requests to send out
+                logger.info("Sending reports to {0}...".format(self._report_destinations))
                 for location in self._report_destinations:
                     coros.append(asyncio.Task(self._send(location, payload, headers)))
                 responses = yield from asyncio.gather(*coros)
                 for response in responses:
                     if response.status == 200:
+                        logger.info("Report OK")
                         for ts in self.timeseries.values():
                             ts.clear_report()
+                    else:
+                        logger.warning("Report failed!", response.content)
                     response.close()
             except Exception as e:
                 print("error", e)
