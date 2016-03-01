@@ -4,6 +4,7 @@ import json
 import uuid
 import aiohttp
 import logging
+from tabulate import tabulate
 logging.basicConfig(format='%(levelname)s:%(asctime)s %(name)s %(message)s', level=logging.INFO)
 logger = logging.getLogger('driver')
 logging.getLogger("requests.packages.urllib3.connectionpool").setLevel(logging.WARNING)
@@ -298,6 +299,14 @@ class Driver(object):
                 report.update({path: act.get_report() for path, act in self.actuators.items()})
                 if not len(report) > 0:
                     continue # nothing to send
+
+                table = []
+                for path, ts in report.items():
+                    if len(ts['Readings']) == 0: continue
+                    values = [x[1] for x in ts['Readings']]
+                    times = [x[0] for x in ts['Readings']]
+                    table.append([path, len(ts['Readings']), min(values), max(values)])
+                print(tabulate(table))
 
                 payload = json.dumps(report)
                 headers = {'Content-type': 'application/json'}
