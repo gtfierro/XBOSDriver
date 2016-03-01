@@ -203,8 +203,35 @@ class Driver(object):
             ts.actuator.model = kind
             ts.actuator.states = states
             ts.actuator.range = range
+            ts.actuator.callback = callback
+            ts.actuator.args = args
             self.actuators[act_path] = ts.actuator
-            self.add_subscription("Actuator/override = '{0}'".format(ts.actuator_uuid), callback)
+            self.add_subscription("Actuator/override = '{0}'".format(ts.actuator_uuid), callback, args=args)
+
+    def attach_schedule(self, path, scheduleName, pointName):
+        """
+        We attach a schedule to an actuatable timeseries. We check if the timeseries has an associated actuator
+
+        We start a subscription to the given schedulename and pointname: SUB where Schedule/Name = {scheduleName} and Schedule/Point/Name = {pointName}.
+        We also add the following to our metadata:
+            Schedule/Subscribed = {scheduleName}
+            Schedule/Point/Subscribed = {pointName}
+
+        We also start another subscription to ourselves so we know when our metadata has changed
+        """
+        ts = self.timeseries.get(path, None)
+        # if this is not an actuator, then get the actuator
+        if ts.is_actuator:
+            raise ValidationException("Path {0} is an actuator. Please use the associated timeseries, not the actuator")
+        elif ts.actuator == None: # ts does not have an actuator
+                raise ValidationException("Path {0} cannot be scheduled because it is not an actuator or does not have an associated actuator".format(path))
+        act = ts.actuator
+        # here: 'act' is the actuator we want to schedule
+        self.add_subscription("Metadata/Schedule/Name = '{0}' and Metadata/Schedule/Point/Name = '{1}'".format(scheduleName, pointName), act.callback, act.args)
+
+        # add metadata for what schedule we subscribe to
+        self.attach_metadata(path, {'Schedule': {'Subscribed': scheduleName,
+                                                 'Point': {'Subscribed': pointName}}})
 
     def add(self, path, value, time=None):
         if path not in self.timeseries.keys():

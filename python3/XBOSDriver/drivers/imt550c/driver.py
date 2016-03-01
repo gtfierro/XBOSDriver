@@ -155,6 +155,9 @@ class IMT550CDriver(driver.Driver):
         self.attach_actuator('/temp_heat', self.set_heating_setpoint, kind=driver.CONTINUOUS_ACTUATOR)
         self.attach_actuator('/temp_cool', self.set_cooling_setpoint, kind=driver.CONTINUOUS_ACTUATOR)
 
+        self.attach_schedule('/temp_heat', 'weekday', 'Heating Setpoint')
+        self.attach_schedule('/temp_cool', 'weekday', 'Cooling Setpoint')
+
     def set_heating_setpoint(self, data):
         if 'Readings' not in data: return
         setting = data['Readings'][-1][1]
