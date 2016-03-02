@@ -140,9 +140,7 @@ class IMT550CDriver(driver.Driver):
 
 
         for path, timeseries in self.timeseries.items():
-            self.attach_metadata(path, {'Location': {'Building': "Soda Hall",
-                                                     'Room': 'Gabe Desk'},
-                                        'SourceName': '410 Thermostats',
+            self.attach_metadata(path, {
                                         'Device': {
                                             'Manufacturer': 'Proliphix',
                                             'Model': 'IMT550C'
