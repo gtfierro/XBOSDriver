@@ -7,10 +7,10 @@ import xmltodict
 import time
 
 config = {
-    "report_destinations": ["http://pantry.cs.berkeley.edu:8079/add/apikey"],
+    "report_destinations": ["http://localhost:8079/add/apikey"],
     "instanceUUID": "4fcb759c-dc28-11e5-bb93-0cc47a0f7eea",
     "apikey": "dummyapikey",
-    "archiver": "http://pantry.cs.berkeley.edu:8079"
+    "archiver": "http://localhost:8079"
 }
 
 opts = {
