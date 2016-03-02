@@ -8,6 +8,7 @@ from tabulate import tabulate
 logging.basicConfig(format='%(levelname)s:%(asctime)s %(name)s %(message)s', level=logging.INFO)
 logger = logging.getLogger('driver')
 logging.getLogger("requests.packages.urllib3.connectionpool").setLevel(logging.WARNING)
+logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
 from XBOSDriver.timeseriestypes import UNIT_TIMES, STREAM_TYPES, UNIT_TIME_MAP
 from XBOSDriver.timeseriestypes import STREAM_TYPE_NUMERIC
