@@ -62,7 +62,7 @@ class RainforestEagleDriver(driver.Driver):
 		return rv.decode(encoding='UTF-8')
 
 	def start(self):
-		self.startPoll(self.poll, self.rate)
+		self.startPoll(self.poll, self.poll_rate)
 
 	def poll(self):
 		try:
