@@ -1,0 +1,71 @@
+#!/usr/bin/python3
+
+"""
+This script will load an .ini file that defines an XBOS driver
+instance and spool up an instance of it. It would be cool if this
+also could automatically start up a supervisor instance
+"""
+
+from xmlrpc import client
+import argparse
+import importlib
+import configparser
+import sys
+
+class SupervisorD:
+    def __init__(self, server_url):
+        self.SUPERVISOR_SERVER = server_url
+        self.supervisor = client.Server(self.SUPERVISOR_SERVER).supervisor
+        res = self.supervisor.getState()
+        if res.get('statename') != 'RUNNING':
+            print("Could not connect to {0}. Try editing the [inet_http_server] section of your supervisord.conf file".format(self.SUPERVISOR_SERVER))
+            sys.exit(1)
+
+    def is_running(self):
+        return self.supervisor.getState().get('statename') == 'RUNNING'
+
+    def list_processes(self):
+        self.supervisor.getAllProcessInfo()
+
+
+def start_source(args):
+    inifile = args.file
+    supervisorname = args.s
+    url = args.u
+    if supervisorname is not None:
+        spd = SupervisorD(url)
+
+    config = configparser.ConfigParser()
+    config.optionxform=str
+    config.read(inifile)
+    if 'deployment' not in config.sections():
+        print("{0} needs [deployment] section".format(inifile))
+        sys.exit(1)
+    if 'instance' not in config.sections():
+        print("{0} needs [instance] section".format(inifile))
+        sys.exit(1)
+    # get driver
+    drivername = config['deployment']['driver']
+    name = drivername.split('.')[-1]
+    pkg = '.'.join(drivername.split('.')[:-1])
+    mod = __import__(pkg, fromlist=[name])
+    driver = getattr(mod, name)
+    config['deployment'].pop('driver')
+
+    driver.run(config['deployment'], config['instance'], config['metadata'])
+
+if __name__=='__main__':
+    parser = argparse.ArgumentParser()
+    sp = parser.add_subparsers()
+
+    p_start_source = sp.add_parser('start')
+    p_start_source.add_argument("file", action="store", help="The .ini configuration to start as an XBOS driver")
+    p_start_source.add_argument("-s", "-supervisor", action="store", help="Starts this driver as a supervisord process under the provided name")
+    p_start_source.add_argument("-u", "-url", action="store", help="URL for SupervisorD XMLRPC service", default="http://localhost:9001/RPC2")
+    p_start_source.set_defaults(func=start_source)
+
+    args = parser.parse_args()
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(0)
+    args.func(args)
