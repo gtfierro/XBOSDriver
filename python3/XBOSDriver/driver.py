@@ -233,7 +233,7 @@ class Driver(object):
                 raise ValidationException("Path {0} cannot be scheduled because it is not an actuator or does not have an associated actuator".format(path))
         act = ts.actuator
         # here: 'act' is the actuator we want to schedule
-        self.add_subscription("Metadata/Schedule/Name = '{0}' and Metadata/Schedule/Point/Name = '{1}'".format(scheduleName, pointName), act.callback, act.args)
+        self.add_subscription("Metadata/Schedule/Name = '{0}' and Metadata/Schedule/Point/Name = '{1}'".format(scheduleName, pointName), act.callback, args=act.args)
 
         # add metadata for what schedule we subscribe to
         self.attach_metadata(path, {'Schedule': {'Subscribed': scheduleName,
