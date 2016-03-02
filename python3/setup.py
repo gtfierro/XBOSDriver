@@ -7,5 +7,6 @@ setup(name='XBOSDriver',
       description='Drivers for XBOS',
       author='Gabe Fierro',
       author_email='gtfierro@eecs.berkeley.edu',
-      packages=['XBOSDriver'],
+      packages=['XBOSDriver','XBOSDriver.drivers'],
+      scripts=['bin/xbos-driver-start'],
      )

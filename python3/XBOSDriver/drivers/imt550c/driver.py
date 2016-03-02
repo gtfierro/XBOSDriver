@@ -17,7 +17,8 @@ opts = {
     "ip": "10.4.10.111",
     "user": "admin",
     "password": "admin",
-    "report_rate": 5,
+    "report_rate": 20,
+    "poll_rate": 10,
     "name": "Gabe Desk Thermostat",
     "deviceID": "96f75948-d068-11e5-bef6-0cc47a0f7eea"
 }
@@ -25,6 +26,7 @@ opts = {
 class IMT550CDriver(driver.Driver):
     def setup(self, opts):
         self.rate = int(opts.get('report_rate', 10))
+        self.poll_rate = int(opts.get('poll_rate', 10))
         self.ip = opts.get('ip')
         self.user = opts.get('user', None)
         self.password = opts.get('password', None)
@@ -177,7 +179,7 @@ class IMT550CDriver(driver.Driver):
         print(r)
 
     def start(self):
-        self.startPoll(self.poll, self.rate)
+        self.startPoll(self.poll, self.poll_rate)
 
     def poll(self):
         for p in self.points0:
@@ -186,18 +188,18 @@ class IMT550CDriver(driver.Driver):
                 r = requests.get(url, auth=HTTPDigestAuth(self.user, self.password))
                 if not r.ok:
                     print('got status code',r.status_code,'from api')
-                    time.sleep(10)
+                    time.sleep(5)
                     return
                 val = r.text.split('=', 1)[-1]
                 # when the thermostat reboots, sometimes we get extraneous readings
                 if abs(int(val)) > 20000:
-                    time.sleep(10)
+                    time.sleep(5)
                     return
                 #print(p,val)
                 self.add("/" + p["name"], p['devtosmap'](float(val)))
             except Exception as e:
                 print('error connecting',e)
-                time.sleep(10)
+                time.sleep(5)
                 return
 
 def run(dvr, config, opts):

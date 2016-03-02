@@ -14,7 +14,7 @@ class Subscriber:
 
     def subscribe(self):
         try:
-            print("subscribe to", self.url)
+            print("subscribe to", self.url, self.query)
             resp = yield from aiohttp.request("POST", self.url, data=self.query)
         except Exception as e:
             print(e)

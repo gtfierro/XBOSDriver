@@ -124,7 +124,6 @@ class Timeseries(object):
         Attaches metadata to this timeseries following update/insert policy
         """
         self.metadata = util.dict_merge(metadata, self.metadata)
-        print('md is now', self.metadata)
         self.dirty = True
         if self.actuator is not None:
             self.actuator.attach_metadata(metadata)
@@ -141,33 +140,36 @@ class Timeseries(object):
     #      zone controllers too
 
 class Driver(object):
-    def __init__(self, config):
+    def __init__(self, config, base_metadata):
         # timeseries registered with this driver
         self.timeseries = {}
         # actuator paths registered
         self.actuators = {}
-        self.instanceUUID = config.get('instanceUUID', uuid.uuid1())
+        self.instanceUUID = config.get('instance_uuid', uuid.uuid1())
         if not isinstance(self.instanceUUID, uuid.UUID):
             self.instanceUUID = uuid.UUID(self.instanceUUID)
         self.metadata = {}
-        self._report_destinations = config.get('report_destinations', [])
+        self._report_destinations = config.get('report_destinations', ",").split(',')
         # we introduce the archiver as a necessary part of driver configuration
         self._archiver = config.get('archiver', 'http://localhost:8079')
         self._udp4socks = {}
         self._tasks = []
         self.config = config
 
+        # setup the base metadata for each timeseries to inherit as they are created
+        self._base_metadata = util.build_recursive(base_metadata) if base_metadata is not None else {}
 
     def prepare(self):
         self._loop = asyncio.get_event_loop()
 
         if len(self._report_destinations) > 0:
+            self._tasks.append(self._doreport())
             self._tasks.append(self._report())
 
     def add_subscription(self, query, callback, url=None, args=None):
         if url is None:
             url = self._archiver+'/republish'
-        subscription = Subscriber(url, query, callback)
+        subscription = Subscriber(url, query, callback, args)
         self._tasks.append(subscription.subscribe())
 
     def add_timeseries(self, path, unit_measure, unit_time, stream_type):
@@ -177,6 +179,8 @@ class Driver(object):
         else:
             ts_uuid = str(uuid.uuid5(self.instanceUUID, path))
             self.timeseries[path] = Timeseries(path, ts_uuid, unit_measure, unit_time, stream_type)
+            # add default metadata. This can be replaced with attach_metadata
+            self.attach_metadata(path, self._base_metadata)
         return path
 
     def attach_metadata(self, path, metadata):
@@ -241,11 +245,10 @@ class Driver(object):
 
     def _send(self, url, data, headers):
         try:
-            #print("send", data, headers)
             r = yield from aiohttp.request("POST", url, data=data, headers=headers)
             return r
         except Exception as e:
-            print("error",e)
+            print("error",url,e)
 
     def startPoll(self, func, rate):
         """
@@ -288,17 +291,29 @@ class Driver(object):
             )
         )
 
+    @classmethod
+    def run(klass, config, opts, metadata):
+        inst = klass(config, metadata)
+        inst.setup(opts)
+        inst.prepare()
+        inst.start()
+        inst._dostart()
+
     #TODO: add report "added X points in the last minute w/ mean X, min Y max Z?"
     @asyncio.coroutine
     def _report(self):
         while True:
             yield from asyncio.sleep(self.rate)
+            yield from self._doreport()
+
+    @asyncio.coroutine
+    def _doreport(self):
             try:
                 # generate report
                 report = {path: ts.get_report() for path, ts in self.timeseries.items()}
                 report.update({path: act.get_report() for path, act in self.actuators.items()})
                 if not len(report) > 0:
-                    continue # nothing to send
+                    return # nothing to send
 
                 table = []
                 for path, ts in report.items():
@@ -306,7 +321,7 @@ class Driver(object):
                     values = [x[1] for x in ts['Readings']]
                     times = [x[0] for x in ts['Readings']]
                     table.append([path, len(ts['Readings']), min(values), max(values)])
-                print(tabulate(table))
+                logger.info(tabulate(table))
 
                 payload = json.dumps(report)
                 headers = {'Content-type': 'application/json'}
@@ -325,7 +340,6 @@ class Driver(object):
                     response.close()
             except Exception as e:
                 print("error", e)
-
 
     def recv(self, addr, data):
         pass

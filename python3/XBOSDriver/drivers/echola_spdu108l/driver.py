@@ -40,10 +40,7 @@ class EcholaSPDU108LDriver(driver.Driver):
             self.attach_metadata(powerpath, {"Point": {"Type": "Sensor", "Sensor": "Power"}})
 
         for path, timeseries in self.timeseries.items():
-            self.attach_metadata(path, {'Location': {'Building': "Soda Hall",
-                                                     'Room': '410 Gabe'},
-                                        'SourceName': '410 Plug Strip',
-                                        'Device': {
+            self.attach_metadata(path, {'Device': {
                                             'Manufacturer': 'Echola',
                                             'Model': 'SPDU 108L'
                                             },
@@ -52,7 +49,7 @@ class EcholaSPDU108LDriver(driver.Driver):
                                         })
         for plug in range(1,9):
             path = "/echola/plug/{0}/".format(plug)
-            self.attach_actuator(path+"on", self.actuate_plug, kind=driver.BINARY_ACTUATOR, args=(plug, ))
+            self.attach_actuator(path+"on", self.actuate_plug, kind=driver.BINARY_ACTUATOR, args=[plug])
 
     def start(self):
         self.startPoll(self.poll, self.rate)
@@ -77,4 +74,5 @@ def run(dvr, config, opts):
     inst.start()
     inst._dostart()
 
-run(EcholaSPDU108LDriver, config, opts)
+if __name__=='__main__':
+    run(EcholaSPDU108LDriver, config, opts)

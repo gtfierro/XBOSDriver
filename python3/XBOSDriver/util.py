@@ -40,7 +40,7 @@ def build_recursive(d, suppress=['type', 'key', 'uuid']):
         pieces = k.split('/')
         cur = rv
         for cmp in pieces[:-1]:
-            if not cur.has_key(cmp):
+            if not cmp in cur.keys():
                 cur[cmp] = {}
             cur = cur[cmp]
         cur[pieces[-1]] = v
