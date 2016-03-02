@@ -167,7 +167,7 @@ class Driver(object):
             self._tasks.append(self._doreport())
             self._tasks.append(self._report())
 
-    def add_subscription(self, query, callback, url=None, args=None):
+    def add_subscription(self, query, callback, url=None, args=[]):
         if url is None:
             url = self._archiver+'/republish'
         subscription = Subscriber(url, query, callback, args)
