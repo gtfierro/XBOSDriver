@@ -20,7 +20,7 @@ BINARY_ACTUATOR = 'binary'
 CONTINUOUS_ACTUATOR = 'continuous'
 
 class Timeseries(object):
-    def __init__(self, path, ts_uuid, unit_measure, unit_time, stream_type, is_actuator=False):
+    def __init__(self, path, ts_uuid, unit_measure, unit_time, stream_type):
         # validate
         Timeseries._validate_unit_measure(unit_measure)
         Timeseries._validate_unit_time(unit_time)
@@ -46,12 +46,10 @@ class Timeseries(object):
             self.properties['ReadingType'] = 'double' # sane default. No need for long
         # metadata for this timeseries
         self.metadata = {}
-        # actuator timeseries
-        self.actuator = None
         # whether or not there is metadata/properties that have yet to be committed
         self.dirty = True
         # if this stream is an actuator
-        self.is_actuator = is_actuator
+        self.has_actuator = False
 
     def __repr__(self):
         return "<Timeseries Path={path} UnitofMeasure={uom} UnitofTime={uot} StreamType={st}".format(
@@ -106,10 +104,8 @@ class Timeseries(object):
             #TODO: just send the "diff"
             report["Properties"] = self.properties
             report["Metadata"] = self.metadata
-            if self.actuator is not None:
-                report["Actuator"] = {"uuid": self.actuator_uuid}
-            elif self.is_actuator:
-                report["Actuator"] = {"Model": self.model}
+            if self.has_actuator:
+                report["Actuator"] = {"uuid": self.actuator_uuid, "Model": self.actuator_model}
         return report
 
     def clear_report(self):
@@ -126,26 +122,18 @@ class Timeseries(object):
         """
         self.metadata = util.dict_merge(metadata, self.metadata)
         self.dirty = True
-        if self.actuator is not None:
-            self.actuator.attach_metadata(metadata)
 
     def attach_actuator(self, kind=None, states=None, range=None):
-        if self.is_actuator:
-            raise ValidationException("Path {0} is already an actuator".format(self.path))
+        if self.has_actuator:
+            raise ValidationException("Path {0} already has an actuator".format(self.path))
         if kind not in [BINARY_ACTUATOR, CONTINUOUS_ACTUATOR]:
             raise ValidationException("Actuator must be Binary or Continuous")
         self.actuator_uuid = str(uuid.uuid5(uuid.UUID(self.uuid), self.path+'_act'))
-    #TODO: maybe define an attach_schedule to a timeseries? it would need to have an actuator on it
-    #      and the method would automatically call that actuator and do the necessary conversions (or at least
-    #      warn you when they were wrong). maybe "attach_actuation_source"? needs to be more general, e.g. for
-    #      zone controllers too
 
 class Driver(object):
     def __init__(self, config, base_metadata):
         # timeseries registered with this driver
         self.timeseries = {}
-        # actuator paths registered
-        self.actuators = {}
         self.instanceUUID = config.get('instance_uuid', uuid.uuid1())
         if not isinstance(self.instanceUUID, uuid.UUID):
             self.instanceUUID = uuid.UUID(self.instanceUUID)
@@ -200,18 +188,15 @@ class Driver(object):
             return
 
         # add in the actuator
-        act_path = path+'_act'
-        if act_path in self.actuators.keys():
-            raise ValidationException("Path {0} is already registered as an actuator".format(act_path))
+        if ts.has_actuator:
+            raise ValidationException("Path {0} is already registered as an actuator".format(path))
         else:
-            ts.actuator = Timeseries(path+'_act', ts.actuator_uuid, ts.unit_measure, ts.unit_time, ts.stream_type, is_actuator=True)
-            ts.actuator.attach_metadata(ts.metadata)
-            ts.actuator.model = kind
-            ts.actuator.states = states
-            ts.actuator.range = range
-            ts.actuator.callback = callback
-            ts.actuator.args = args
-            self.actuators[act_path] = ts.actuator
+            ts.actuator_model = kind
+            ts.actuator_states = states
+            ts.actuator_range = range
+            ts.actuator_callback = callback
+            ts.actuator_args = args
+            ts.has_actuator = True
             self.add_subscription("Actuator/override = '{0}'".format(ts.actuator_uuid), callback, args=args)
 
     def attach_schedule(self, path, scheduleName, pointName):
@@ -226,14 +211,9 @@ class Driver(object):
         We also start another subscription to ourselves so we know when our metadata has changed
         """
         ts = self.timeseries.get(path, None)
-        # if this is not an actuator, then get the actuator
-        if ts.is_actuator:
-            raise ValidationException("Path {0} is an actuator. Please use the associated timeseries, not the actuator")
-        elif ts.actuator == None: # ts does not have an actuator
-                raise ValidationException("Path {0} cannot be scheduled because it is not an actuator or does not have an associated actuator".format(path))
-        act = ts.actuator
-        # here: 'act' is the actuator we want to schedule
-        self.add_subscription("Metadata/Schedule/Name = '{0}' and Metadata/Schedule/Point/Name = '{1}'".format(scheduleName, pointName), act.callback, args=act.args)
+        if not ts.has_actuator: # ts does not have an actuator
+            raise ValidationException("Path {0} cannot be scheduled because it is not an actuator or does not have an associated actuator".format(path))
+        self.add_subscription("Metadata/Schedule/Name = '{0}' and Metadata/Schedule/Point/Name = '{1}'".format(scheduleName, pointName), ts.actuator_callback, args=ts.actuator_args)
 
         # add metadata for what schedule we subscribe to
         self.attach_metadata(path, {'Schedule': {'Subscribed': scheduleName,
@@ -312,7 +292,6 @@ class Driver(object):
             try:
                 # generate report
                 report = {path: ts.get_report() for path, ts in self.timeseries.items()}
-                report.update({path: act.get_report() for path, act in self.actuators.items()})
                 if not len(report) > 0:
                     return # nothing to send
 

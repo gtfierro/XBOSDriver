@@ -87,31 +87,6 @@ class IMT550CDriver(driver.Driver):
         ts = {}
         for p in self.points0:
             ts[p['name']] = self.add_timeseries('/' + p["name"], p["unit"], 'milliseconds', 'numeric')
-            #if p['access'] == 6:
-            #    if p['act_type'] == 'discrete':
-            #        setup={'model': 'discrete', 'ip':self.ip, 'states': p['range'],
-            #            'user': self.user, 'password': self.password, 'OID': p['OID'],
-            #            'devtosmap': p['devtosmap'], 'smaptodev': p['smaptodev']}
-            #        act = DiscreteActuator(subscribe=opts.get(p['name']),archiver=opts.get('archiver'), **setup)
-            #    elif p['act_type'] == 'continuous':
-            #        setup={'model': 'continuous', 'ip':self.ip, 'range': p['range'],
-            #            'user': self.user, 'password': self.password, 'OID': p['OID'],
-            #            'devtosmap': p['devtosmap'], 'smaptodev': p['smaptodev']}
-            #        act = ContinuousActuator(subscribe=opts.get(p['name']),archiver=opts.get('archiver'), **setup)
-            #    elif p['act_type'] == 'continuousInteger':
-            #        setup={'model': 'continuousInteger', 'ip':self.ip, 'range': p['range'],
-            #            'user': self.user, 'password': self.password, 'OID': p['OID'],
-            #            'devtosmap': p['devtosmap'], 'smaptodev': p['smaptodev']}
-            #        act = ContinuousIntegerActuator(subscribe=opts.get(p['name']),archiver=opts.get('archiver'), **setup)
-            #    elif p['act_type'] == 'binary':
-            #        setup={'model': 'binary', 'ip':self.ip, 'user':self.user,
-            #                'password':self.password, 'OID': p['OID'],
-            #                'devtosmap': p['devtosmap'], 'smaptodev': p['smaptodev']}
-            #        act = BinaryActuator(subscribe=opts.get(p['name']),archiver=opts.get('archiver'), **setup)
-            #    else:
-            #        print "something is wrong here", p
-            #        continue
-            #    ts[p['name']].add_actuator(act)
 
         # setup metadata for each timeseries
         metadata_type = [
@@ -152,13 +127,14 @@ class IMT550CDriver(driver.Driver):
                                             'Type': 'Thermostat',
                                             }
                                         })
-        self.attach_actuator('/temp_heat', self.set_heating_setpoint, kind=driver.CONTINUOUS_ACTUATOR)
-        self.attach_actuator('/temp_cool', self.set_cooling_setpoint, kind=driver.CONTINUOUS_ACTUATOR)
+        self.attach_actuator('/temp_cool', self.set_cooling_setpoint, kind=driver.CONTINUOUS_ACTUATOR, args=('cool', ))
+        self.attach_actuator('/temp_heat', self.set_heating_setpoint, kind=driver.CONTINUOUS_ACTUATOR, args=('heat', ))
 
         self.attach_schedule('/temp_heat', 'weekday', 'Heating Setpoint')
         self.attach_schedule('/temp_cool', 'weekday', 'Cooling Setpoint')
 
-    def set_heating_setpoint(self, data):
+    def set_heating_setpoint(self, data, *args):
+        print("GOT DATA", data, args)
         if 'Readings' not in data: return
         setting = data['Readings'][-1][1]
         print("got data HEAT", data, setting)
@@ -167,7 +143,8 @@ class IMT550CDriver(driver.Driver):
             auth=HTTPDigestAuth(self.user, self.password), params=payload)
         print(r)
 
-    def set_cooling_setpoint(self, data):
+    def set_cooling_setpoint(self, data, *args):
+        print("GOT DATA", data, args)
         if 'Readings' not in data: return
         setting = data['Readings'][-1][1]
         print("got data COOL", data, setting)
@@ -193,7 +170,7 @@ class IMT550CDriver(driver.Driver):
                 if abs(int(val)) > 20000:
                     time.sleep(5)
                     return
-                #print(p,val)
+                print(p["name"],val)
                 self.add("/" + p["name"], p['devtosmap'](float(val)))
             except Exception as e:
                 print('error connecting',e)
